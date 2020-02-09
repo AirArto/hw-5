@@ -1,54 +1,78 @@
 package goroutine
 
+import (
+	"sync"
+)
+
 //Run to start execution of functions in tasks slice in N goroutines until M errors
 func Run(tasks []func() error, N int, M int) error {
 	var goroutCount int
-	if N < len(tasks) {
+	if N < len(tasks) && N > 0 {
 		goroutCount = N
 	} else {
 		goroutCount = len(tasks)
 	}
 
-	var ErrorChan = make(chan error, M)
-	var FuncChan = make(chan func() error)
-	var CheckChan = make(chan bool, goroutCount)
-	var StopChan = make(chan bool)
+	var errCount int
+	if M > 0 {
+		errCount = M
+	} else {
+		M = 0
+		errCount = goroutCount
+	}
+
+	mur := sync.RWMutex{}
+	var once sync.Once
+	var errorChan = make(chan error, errCount)
+	var funcChan = make(chan func() error, goroutCount)
+	var checkChan = make(chan bool, goroutCount)
+	var stopChan = make(chan bool)
 	for i := 1; i <= goroutCount; i++ {
-		go func(i int) {
-			for currentFunc := range FuncChan {
-				if !checkErr(ErrorChan) {
-					err := currentFunc()
-					if err != nil {
-						ErrorChan <- err
-						if checkErr(ErrorChan) {
-							StopChan <- true
-						}
+		go func() {
+			for currentFunc := range funcChan {
+				if compareChanLen(errorChan, &mur, errCount) {
+					continue
+				}
+				err := currentFunc()
+				if err != nil {
+					if !compareChanLen(errorChan, &mur, errCount) {
+						mur.Lock()
+						errorChan <- err
+						mur.Unlock()
+					}
+					if compareChanLen(errorChan, &mur, errCount) {
+						once.Do(func() { stopChan <- true })
 					}
 				}
 			}
-			if !checkErr(ErrorChan) {
-				CheckChan <- true
-				if len(CheckChan) == goroutCount {
-					StopChan <- true
+			if !compareChanLen(errorChan, &mur, errCount) {
+				checkChan <- true
+				if len(checkChan) == goroutCount {
+					once.Do(func() { stopChan <- true })
 				}
 			}
-		}(i)
+		}()
 	}
 	for _, task := range tasks {
-		FuncChan <- task
+		funcChan <- task
 	}
-	close(FuncChan)
-	<-StopChan
-	close(StopChan)
-	close(CheckChan)
-	close(ErrorChan)
+	close(funcChan)
+	<-stopChan
+	close(stopChan)
+	close(checkChan)
+	close(errorChan)
 	return nil
 }
 
-func checkErr(ErrorChan chan error) bool {
-	if len(ErrorChan) < cap(ErrorChan) {
+// Compared len of chan with second parameter
+func compareChanLen(someChan chan error, mur *sync.RWMutex, compare int) bool {
+	mur.RLock()
+	defer mur.RUnlock()
+	if compare == 0 {
 		return false
-	} else {
-		return true
 	}
+	if len(someChan) < compare {
+		return false
+	}
+	return true
 }
