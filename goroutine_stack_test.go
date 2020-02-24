@@ -6,10 +6,8 @@ import (
 )
 
 func TestRun(t *testing.T) {
-	testInt := 0
 	taskList := [...]func() error{
 		func() error {
-			testInt = 1
 			return nil
 		},
 		func() error { return errors.New("err") },
@@ -19,20 +17,16 @@ func TestRun(t *testing.T) {
 		func() error { return errors.New("err") },
 		func() error { return errors.New("err") },
 		func() error {
-			testInt = 1
 			return nil
 		},
 		func() error {
-			testInt = 1
 			return nil
 		},
 		func() error {
-			testInt = 2
 			return nil
 		},
 		func() error { return errors.New("err") },
 		func() error {
-			testInt = 2
 			return nil
 		},
 		func() error { return nil },
@@ -40,26 +34,37 @@ func TestRun(t *testing.T) {
 		func() error { return nil },
 		func() error { return nil },
 		func() error {
-			testInt = 3
 			return nil
 		},
 	}
 	tasks := taskList[:]
-	Run(tasks, 3, 6)
+	err := Run(tasks, 3, 3)
 
-	if testInt != 1 {
+	if err == nil {
 		t.Errorf("\n\t%s", "Something goes wrong")
 	} else {
-		Run(tasks, 2, 8)
+		err = Run(tasks, 2, 8)
 	}
 
-	if testInt != 3 {
+	if err != nil {
 		t.Errorf("\n\t%s", "Something goes wrong")
 	} else {
-		Run(tasks, 4, 7)
+		err = Run(tasks, 4, 7)
 	}
 
-	if testInt != 2 {
+	if err == nil {
+		t.Errorf("\n\t%s", "Something goes wrong")
+	} else {
+		err = Run(tasks, 0, 7)
+	}
+
+	if err == nil {
+		t.Errorf("\n\t%s", "Something goes wrong")
+	} else {
+		err = Run(tasks, 3, 0)
+	}
+
+	if err == nil {
 		t.Errorf("\n\t%s", "Something goes wrong")
 	}
 }
